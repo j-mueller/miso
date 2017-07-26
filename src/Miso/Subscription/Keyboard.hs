@@ -22,7 +22,7 @@ module Miso.Subscription.Keyboard
 import           Data.IORef
 import           Data.Set
 import qualified Data.Set as S
-import           GHCJS.Foreign.Callback
+-- import           GHCJS.Foreign.Callback
 import           GHCJS.Marshal
 import           JavaScript.Object
 import           JavaScript.Object.Internal

@@ -40,7 +40,7 @@ flag tests
 executable todo-mvc
   main-is:
     Main.hs
-  if !impl(ghcjs) || !flag(examples)
+  if !flag(examples)
     buildable: False
   else
     hs-source-dirs:
@@ -73,7 +73,7 @@ executable xhr
 executable router
   main-is:
     Main.hs
-  if !impl(ghcjs) || !flag(examples)
+  if !flag(examples)
     buildable: False
   else
     hs-source-dirs:
@@ -90,7 +90,7 @@ executable router
 executable websocket
   main-is:
     Main.hs
-  if !impl(ghcjs) || !flag(examples)
+  if !flag(examples)
     buildable: False
   else
     hs-source-dirs:
@@ -106,7 +106,7 @@ executable websocket
 executable mario
   main-is:
     Main.hs
-  if !impl(ghcjs) || !flag(examples)
+  if !flag(examples)
     buildable: False
   else
     hs-source-dirs:
@@ -121,7 +121,7 @@ executable mario
 executable simple
   main-is:
     Main.hs
-  if !impl(ghcjs) || !flag(examples)
+  if !flag(examples)
     buildable: False
   else
     hs-source-dirs:
@@ -137,7 +137,7 @@ executable simple
 executable tests
   main-is:
     Main.hs
-  if !impl(ghcjs) || !flag(tests)
+  if !flag(tests)
     buildable: False
   else
     hs-source-dirs:
@@ -169,6 +169,19 @@ library
     Miso.Svg.Element
     Miso.Svg.Event
     Miso.String
+    Miso.Effect
+    Miso.Effect.Storage
+    Miso.Effect.XHR
+    Miso.Effect.DOM
+    Miso.Router
+    Miso.Subscription
+    Miso.Subscription.History
+    Miso.Subscription.Keyboard
+    Miso.Subscription.Mouse
+    Miso.Subscription.WebSocket
+    Miso.Subscription.Window
+    Miso.Subscription.SSE
+    Miso.Types
   other-modules:
     Miso.Concurrent
     Miso.Html.Internal
@@ -183,15 +196,19 @@ library
     BoundedChan,
     containers,
     servant,
+    http-types,
+    http-api-data,
+    network-uri,
+    transformers,
+    unordered-containers,
+    scientific,
+    lens,
     text
   if impl(ghcjs)
     hs-source-dirs:
       ghcjs-src
     build-depends:
       ghcjs-base,
-      http-types,
-      network-uri,
-      http-api-data,
       containers,
       scientific,
       unordered-containers,
@@ -227,7 +244,8 @@ library
     build-depends:
       lucid,
       servant-lucid,
-      vector
+      vector,
+      jsaddle
     hs-source-dirs:
       ghc-src
 
