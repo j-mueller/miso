@@ -52,20 +52,24 @@ module Miso.Html.Internal (
   ) where
 
 import           Control.Monad
-import           Data.Aeson.Types           (parseEither)
+import           Control.Monad.IO.Class
+import           Data.Aeson.Types (parseEither)
 import           Data.JSString
 import           Data.JSString.Text
-import qualified Data.Map                   as M
+import qualified Data.Map as M
 import           Data.Monoid
 import           Data.Proxy
-import qualified Data.Text                  as T
+import qualified Data.Text as T
 -- import           GHCJS.Foreign.Callback
 import           GHCJS.Marshal
 import           GHCJS.Types
-import           JavaScript.Array.Internal  (fromList)
+import           JavaScript.Array.Internal (fromList)
 import           JavaScript.Object
 import           JavaScript.Object.Internal (Object (Object))
 import           Servant.API
+import Language.Javascript.JSaddle hiding (textToJSString)
+import           Language.Javascript.JSaddle.Types (JSM, ghcjsPure)
+import           Language.Javascript.JSaddle.Object (jsg2, asyncFunction)
 
 import           Miso.Event.Decoder
 import           Miso.Event.Types
@@ -82,7 +86,7 @@ newtype VTree = VTree { getTree :: Object }
 
 -- | Core type for constructing a `VTree`, use this instead of `VTree` directly.
 newtype View action = View {
-  runView :: (action -> IO ()) -> IO VTree
+  runView :: (action -> IO ()) -> JSM VTree
 }
 
 -- | For constructing type-safe links
@@ -93,7 +97,7 @@ instance HasLink (View a) where
 -- | Convenience class for using View
 class ToView v where toView :: v -> View m
 
-set :: ToJSVal v => JSString -> v -> Object -> IO ()
+set :: ToJSVal v => JSString -> v -> Object -> JSM ()
 set k v obj = toJSVal v >>= \x -> setProp k x obj
 
 -- | `VNode` creation
@@ -105,9 +109,9 @@ node :: NS
      -> View m
 node ns tag key attrs kids = View $ \sink -> do
   vnode <- create
-  cssObj <- jsval <$> create
-  propsObj <- jsval <$> create
-  eventObj <- jsval <$> create
+  cssObj <- create
+  propsObj <- create
+  eventObj <- create
   set "css" cssObj vnode
   set "props" propsObj vnode
   set "events" eventObj vnode
@@ -123,10 +127,10 @@ node ns tag key attrs kids = View $ \sink -> do
         forM_ attrs $ \(Attribute attr) ->
           attr sink vnode
 
-      setKids sink =
-        jsval . fromList <$>
-          fmap (jsval . getTree) <$>
-            traverse (flip runView sink) kids
+      setKids sink = do
+        a <- traverse (flip runView sink) kids
+        let b = fmap ((\(Object o) -> o) . getTree) a
+        ((ghcjsPure . jsval) <=< (ghcjsPure . fromList)) b
 
 instance ToJSVal Options
 instance ToJSVal Key where toJSVal (Key x) = toJSVal x
@@ -174,7 +178,7 @@ instance ToKey Float where toKey = Key . pack . show
 instance ToKey Word where toKey = Key . pack . show
 
 -- | `View` Attributes to annotate DOM, converted into `Events`, `Props`, `Attrs` and `CSS`
-newtype Attribute action = Attribute ((action -> IO ()) -> Object -> IO ())
+newtype Attribute action = Attribute ((action -> IO ()) -> Object -> JSM ())
 
 -- | Constructs a property on a `VNode`, used to set fields on a DOM Node
 prop :: ToJSVal a => MisoString -> a -> Attribute action
@@ -194,8 +198,8 @@ on :: MisoString
    -> Attribute action
 on = onWithOptions defaultOptions
 
-objectToJSON :: JSVal -> JSVal -> IO JSVal
-objectToJSON a b = jsg2 "delegate" a b
+objectToJSON :: JSVal -> JSVal -> JSM JSVal
+objectToJSON a b = jsg2 ("delegate" :: String) a b
 
 -- | For defining delegated events with options
 --
@@ -214,11 +218,11 @@ onWithOptions options eventName Decoder{..} toAction =
    eventHandlerObject@(Object eo) <- create
    jsOptions <- toJSVal options
    decodeAtVal <- toJSVal decodeAt
-   cb <- jsval <$> (asyncCallback1 $ \e -> do
+   Function (Object cb) <- (asyncFunction $ \_function _this [e] -> do
        Just v <- jsvalToValue =<< objectToJSON decodeAtVal e
        case parseEither decoder v of
          Left s -> error $ "Parse error on " <> unpack eventName <> ": " <> s
-         Right r -> sink (toAction r))
+         Right r -> (liftIO . sink . toAction) r)
    setProp "runEvent" cb eventHandlerObject
    setProp "options" jsOptions eventHandlerObject
    setProp eventName eo (Object eventObj)
@@ -233,5 +237,6 @@ onWithOptions options eventName Decoder{..} toAction =
 style_ :: M.Map MisoString MisoString -> Attribute action
 style_ m = Attribute . const $ \n -> do
    cssObj <- getProp "css" n
-   forM_ (M.toList m) $ \(k,v) ->
-     setProp k (jsval v) (Object cssObj)
+   forM_ (M.toList m) $ \(k,v) -> do
+     val <- ghcjsPure (jsval v)
+     setProp k val (Object cssObj)
