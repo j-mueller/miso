@@ -77,7 +77,7 @@ import           Miso.String
 import           Miso.FFI
 
 -- | Type def for constructing event subscriptions
-type Sub a m = IO m -> (a -> IO ()) -> IO ()
+type Sub a m = JSM m -> (a -> IO ()) -> JSM ()
 
 -- | Virtual DOM implemented as a JavaScript `Object`
 --   Used for diffing, patching and event delegation.

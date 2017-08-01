@@ -19,6 +19,7 @@ module Miso.Subscription.Keyboard
   , keyboardSub
   ) where
 
+import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.Set
 import qualified Data.Set as S
@@ -63,23 +64,22 @@ arrowsSub = keyboardSub . (. toArrows)
 -- | Returns subscription for Keyboard
 keyboardSub :: (Set Int -> action) -> Sub action model
 keyboardSub f _ sink = do
-  keySetRef <- newIORef mempty
+  keySetRef <- liftIO (newIORef mempty)
   windowAddEventListener "keyup" =<< keyUpCallback keySetRef
   windowAddEventListener "keydown" =<< keyDownCallback keySetRef
     where
       keyDownCallback keySetRef = do
         asyncCallback1 $ \keyDownEvent -> do
           Just key <- fromJSVal =<< getProp "keyCode" (Object keyDownEvent)
-          newKeys <- atomicModifyIORef' keySetRef $ \keys ->
+          newKeys <- liftIO $ atomicModifyIORef' keySetRef $ \keys ->
              let !new = S.insert key keys
              in (new, new)
-          sink (f newKeys)
+          liftIO (sink (f newKeys))
 
       keyUpCallback keySetRef = do
         asyncCallback1 $ \keyUpEvent -> do
           Just key <- fromJSVal =<< getProp "keyCode" (Object keyUpEvent)
-          newKeys <- atomicModifyIORef' keySetRef $ \keys ->
+          newKeys <- liftIO $ atomicModifyIORef' keySetRef $ \keys ->
              let !new = S.delete key keys
              in (new, new)
-          sink (f newKeys)
-
+          liftIO (sink (f newKeys))
