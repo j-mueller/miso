@@ -26,30 +26,30 @@ import Miso.Effect.DOM
 -- It consists of the updated model and a list of actions. Each action
 -- is run in a new thread so there is no risk of accidentally
 -- blocking the application.
-data Effect action model
-  = Effect model [IO action]
+data Effect m action model
+  = Effect model [m action]
 
-instance Functor (Effect action) where
+instance Functor (Effect m action) where
   fmap f (Effect m acts) = Effect (f m) acts
 
-instance Applicative (Effect action) where
+instance Applicative (Effect m action) where
   pure m = Effect m []
   Effect fModel fActs <*> Effect xModel xActs = Effect (fModel xModel) (fActs ++ xActs)
 
-instance Monad (Effect action) where
+instance Monad (Effect m action) where
   return = pure
   Effect m acts >>= f =
     case f m of
       Effect m' acts' -> Effect m' (acts ++ acts')
 
 -- | Smart constructor for an 'Effect' with no actions.
-noEff :: model -> Effect action model
+noEff :: model -> Effect m action model
 noEff m = Effect m []
 
 -- | Smart constructor for an 'Effect' with exactly one action.
-(<#) :: model -> IO action -> Effect action model
+(<#) :: model -> m action -> Effect m action model
 (<#) m a = Effect m [a]
 
 -- | `Effect` smart constructor, flipped
-(#>) :: IO action -> model -> Effect action model
+(#>) :: m action -> model -> Effect m action model
 (#>) = flip (<#)

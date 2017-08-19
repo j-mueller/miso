@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -23,9 +24,14 @@ module Miso
   , module Miso.Router
   ) where
 
-import           Control.Concurrent
+import Control.Monad.Trans.Control
+import Control.Monad.Base
+import           Control.Monad.IO.Class
+import           Control.Concurrent (forkIO)
+import           Control.Concurrent.Lifted
 import           Control.Monad
 import           Data.IORef
+import qualified Data.IORef.Lifted as LiftedIORef
 import           Data.List
 import           Data.Sequence                 ((|>))
 import qualified Data.Sequence                 as S
@@ -45,25 +51,25 @@ import           Miso.FFI
 
 -- | Helper function to abstract out common functionality between `startApp` and `miso`
 common
-  :: Eq model
-  => App model action
+  :: (Eq model, MonadBaseControl IO m)
+  => App m model action
   -> model
   -> ((action -> IO ()) -> IO (IORef VTree))
-  -> IO b
+  -> m b
 common App {..} m getView = do
   -- init Notifier
-  Notify {..} <- newNotify
+  Notify {..} <- liftBase newNotify
   -- init EventWriter
-  EventWriter {..} <- newEventWriter
+  EventWriter {..} <- liftBase newEventWriter
   -- init empty Model
-  modelRef <- newIORef m
+  modelRef <- liftBase (newIORef m)
   -- init empty actions
   actionsMVar <- newMVar S.empty
   -- init Subs
-  forM_ subs $ \sub ->
+  liftBase $ forM_ subs $ \sub ->
     sub (readIORef modelRef) writeEvent
   -- init event application thread
-  void . forkIO . forever $ do
+  liftBase $ void . fork . forever $ do
     action <- getEvent
     modifyMVar_ actionsMVar $! \actions -> do
       pure (actions |> action)
@@ -71,26 +77,26 @@ common App {..} m getView = do
   -- Hack to get around `BlockedIndefinitelyOnMVar` exception
   -- that occurs when no event handlers are present on a template
   -- and `notify` is no longer in scope
-  void . forkIO . forever $ threadDelay (1000000 * 86400) >> notify
+  liftBase . void . forkIO . forever $ threadDelay (1000000 * 86400) >> notify
   -- Retrieves reference view
-  viewRef <- getView writeEvent
+  viewRef <- liftBase $ getView writeEvent
   -- Begin listening for events in the virtual dom
-  delegator viewRef events
+  liftBase $ delegator viewRef events
   -- Process initial action of application
-  writeEvent initialAction
+  liftBase $ writeEvent initialAction
   -- Program loop, blocking on SkipChan
-  forever $ wait >> do
+  forever $ liftBase wait >> do
     -- Apply actions to model
-    shouldDraw <-
+    shouldDraw <- do
       modifyMVar actionsMVar $! \actions -> do
-        (shouldDraw, effects) <- atomicModifyIORef' modelRef $! \oldModel ->
+        (shouldDraw, effects) <- LiftedIORef.atomicModifyIORef' modelRef $! \oldModel ->
           let (newModel, effects) =
-                foldl' (foldEffects writeEvent update)
+                foldl' (foldEffects (liftBase . writeEvent) update)
                   (oldModel, pure ()) actions
           in (newModel, (oldModel /= newModel, effects))
         effects
         pure (S.empty, shouldDraw)
-    when shouldDraw $ do
+    when shouldDraw $ liftBase $ do
       newVTree <-
         flip runView writeEvent
           =<< view <$> readIORef modelRef
@@ -101,9 +107,9 @@ common App {..} m getView = do
 
 -- | Runs an isomorphic miso application
 -- Assumes the pre-rendered DOM is already present
-miso :: (HasURI model, Eq model) => App model action -> IO ()
+miso :: (HasURI model, Eq model, MonadBaseControl IO m) => App m model action -> m ()
 miso app@App{..} = do
-  uri <- getCurrentURI
+  uri <- liftBase getCurrentURI
   let modelWithUri = setURI uri model
   common app model $ \writeEvent -> do
     let initialView = view modelWithUri
@@ -115,7 +121,7 @@ miso app@App{..} = do
     newIORef initialVTree
 
 -- | Runs a miso application
-startApp :: Eq model => App model action -> IO ()
+startApp :: (Eq model, MonadBaseControl IO m) => App m model action -> m ()
 startApp app@App {..} =
   common app model $ \writeEvent -> do
     let initialView = view model
@@ -125,13 +131,14 @@ startApp app@App {..} =
 
 -- | Helper
 foldEffects
-  :: (action -> IO ())
-  -> (action -> model -> Effect action model)
-  -> (model, IO ()) -> action -> (model, IO ())
+  :: MonadBaseControl IO m
+  => (action -> m ())
+  -> (action -> model -> Effect m action model)
+  -> (model, m ()) -> action -> (model, m ())
 foldEffects sink update = \(model, as) action ->
   case update action model of
     Effect newModel effs -> (newModel, newAs)
       where
         newAs = as >> do
           forM_ effs $ \eff ->
-            void $ forkIO (sink =<< eff)
+            void $ fork (sink =<< eff)

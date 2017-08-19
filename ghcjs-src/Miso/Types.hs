@@ -17,10 +17,10 @@ import           Miso.Html.Internal
 import           Miso.String
 
 -- | Application entry point
-data App model action = App
+data App m model action = App
   { model :: model
   -- ^ initial model
-  , update :: action -> model -> Effect action model
+  , update :: action -> model -> Effect m action model
   -- ^ Function to update model, optionally provide effects
   , view :: model -> View action
   -- ^ Function to draw `View`

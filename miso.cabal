@@ -213,7 +213,10 @@ library
     BoundedChan,
     containers,
     servant,
-    text
+    text,
+    lifted-base,
+                monad-control,
+                transformers-base
   if impl(ghcjs)
     hs-source-dirs:
       ghcjs-src
