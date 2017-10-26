@@ -2,11 +2,13 @@
 , network-uri, scientific, stdenv, text, transformers
 , unordered-containers, vector, hspec, hspec-core, servant
 , http-types, http-api-data, QuickCheck, quickcheck-instances
+, lib
 }:
 mkDerivation {
   pname = "miso";
   version = "0.9.0.0";
-  src = ./.;
+  src = lib.sourceFilesBySuffices ./. [".hs" ".cabal" ".js" "LICENSE"];
+  configureFlags = [ "-ftests" ];
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [

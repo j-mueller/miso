@@ -1,4 +1,12 @@
-{ nixpkgs ? import <nixpkgs> {}, tests ? true, haddock ? true }:
+{ nixpkgs ? import ((import <nixpkgs> {}).fetchFromGitHub {
+    owner = "NixOS";
+    repo = "nixpkgs";
+    rev = "45ffca6ff84ca5e00842900802af577dcfb3e84f";
+    sha256 = "11vnmlix4xkifrlpz4a13r6dnncrwnjibnd2j5sl7zb9vklj40lc";
+  }) {},
+  tests ? true,
+  haddock ? true
+}:
 let
   inherit (nixpkgs.haskell.lib) buildFromSdist enableCabalFlag sdistTarball buildStrictly;
   inherit (nixpkgs.haskell.packages) ghc802 ghcjs;

@@ -1,0 +1,1 @@
+../../../dist-newstyle/build/x86_64-linux/ghcjs-0.2.1/miso-0.9.0.0/c/selenium-client/noopt/build/selenium-client/selenium-client.jsexe/all.js

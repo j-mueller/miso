@@ -242,6 +242,36 @@ executable tests
     default-language:
       Haskell2010
 
+executable selenium-client
+  main-is: Main.hs
+  if !impl(ghcjs) || !flag(tests)
+    buildable: False
+  else
+    hs-source-dirs:
+      tests/selenium/client tests/selenium/shared
+    build-depends:
+      base,
+      miso
+    default-language: Haskell2010
+
+executable selenium-server
+  main-is: Main.hs
+  if impl(ghcjs) || !flag(tests)
+    buildable: False
+  else
+    hs-source-dirs: tests/selenium/server tests/selenium/shared
+    build-depends: base,
+                   lucid,
+                   hspec-webdriver,
+                   miso,
+                   servant,
+                   servant-lucid,
+                   servant-server,
+                   text,
+                   warp,
+                   webdriver
+    default-language: Haskell2010
+
 library
   default-language:
     Haskell2010
