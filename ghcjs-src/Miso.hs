@@ -1,9 +1,9 @@
 {-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE KindSignatures      #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Miso
@@ -15,6 +15,7 @@
 ----------------------------------------------------------------------------
 module Miso
   ( miso
+  , miso'
   , startApp
   , module Miso.Effect
   , module Miso.Event
@@ -41,12 +42,12 @@ import           Miso.Delegate
 import           Miso.Diff
 import           Miso.Effect
 import           Miso.Event
-import           Miso.Util
+import           Miso.FFI
 import           Miso.Html
 import           Miso.Router
 import           Miso.Subscription
 import           Miso.Types
-import           Miso.FFI
+import           Miso.Util
 
 -- | Helper function to abstract out common functionality between `startApp` and `miso`
 common
@@ -102,6 +103,19 @@ common App {..} m getView = do
 miso :: Eq model => (URI -> App model action) -> IO ()
 miso f = do
   app@App {..} <- f <$> getCurrentURI
+  common app model $ \writeEvent -> do
+    let initialView = view model
+    VTree (OI.Object iv) <- flip runView writeEvent initialView
+    -- Initial diff can be bypassed, just copy DOM into VTree
+    copyDOMIntoVTree iv
+    let initialVTree = VTree (OI.Object iv)
+    -- Create virtual dom, perform initial diff
+    newIORef initialVTree
+
+-- | Runs an isomorphic miso application without synchronising the URIs
+-- Assumes the pre-rendered DOM is already present
+miso' :: Eq model => App model action -> IO ()
+miso' app@App{..} = do
   common app model $ \writeEvent -> do
     let initialView = view model
     VTree (OI.Object iv) <- flip runView writeEvent initialView
